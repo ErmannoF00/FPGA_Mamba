@@ -1,0 +1,33 @@
+# Byte-compiled / cache
+__pycache__/
+*.py[cod]
+*.so
+
+# Build & simulation artifacts
+build/
+waveform/
+*.vcd
+output.txt
+*.log
+*.vvp
+
+# Weights and mem files
+weights/*.mem
+data/*.mem
+
+# Dataset cache
+*.pt
+*.pth
+MNIST/
+
+# VSCode and IDE metadata
+.vscode/
+*.code-workspace
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Virtual environments
+venv/
+.env/
