@@ -2,6 +2,10 @@
 
 This project implements a full **MNIST digit inference pipeline** using a simplified **Mamba-style architecture**, mapped to **SystemVerilog for FPGA simulation and deployment**. The core model includes RMSNorm, 1D Convolution, GELU activation, State-Space Models (SSM), and projection layers — all fully quantized in **Q1.15 fixed-point** format.
 
+![Mamba + SSM Diagram](fig/mamba_ssm.jpg)
+
+> Image source: [Zhihu - FightingChiken](https://zhuanlan.zhihu.com/p/1904679657233712721)
+
 ---
 
 ## Architecture
@@ -47,7 +51,6 @@ FPGA_MAMBA/
 ```
 
 ---
-
 
 ### 1. Train and Export Model Weights
 
@@ -128,6 +131,5 @@ make synth       # run synthesis (Yosys)
 * [ ] USB/serial streaming of MNIST data from host
 
 ---
-
 
 Feel free to modify, improve, or fork this project to suit your own hardware deployment or ML-in-FPGA experiments ✨
