@@ -1,0 +1,74 @@
+PYTHON ?= python3
+VERILATOR ?= verilator
+IVERILOG ?= iverilog
+VVP ?= vvp
+YOSYS ?= yosys
+
+.PHONY: research-check research-train research-evaluate research-hybrid research-precision research-vectors scan-lint scan-iverilog scan-verilator scan-synth scan-test scan-rtl-classify-iverilog scan-rtl-classify-verilator
+
+research-check:
+	$(PYTHON) -m unittest tests.test_model_research tests.test_scan_reference -v
+
+research-train:
+	$(PYTHON) -m model.train --scheme bilinear --epochs 32 --output build/trained_model
+
+research-evaluate:
+	$(PYTHON) -m model.evaluate --checkpoint weights/digits_bilinear.pt
+	$(PYTHON) -m model.evaluate --checkpoint weights/digits_zoh.pt
+
+research-hybrid:
+	$(PYTHON) -m model.compare_hybrid --checkpoint weights/digits_bilinear.pt --precision results/precision64.json --output build/hybrid.json
+
+research-precision:
+	$(PYTHON) -m model.precision --checkpoint weights/digits_bilinear.pt --budget 64 --maximum 6 --output build/precision64.json
+
+research-vectors:
+	@mkdir -p build
+	$(PYTHON) -m model.export_scan_vectors --checkpoint weights/digits_bilinear.pt \
+		--bits results/precision64.json --vectors build/model_scan_vectors.txt \
+		--configuration rtl/precision_config.svh --samples 50
+
+scan-lint: research-vectors
+	$(VERILATOR) --lint-only -Wall --top-module precision_scan rtl/precision_scan.sv
+
+scan-iverilog: research-vectors
+	$(IVERILOG) -g2012 -Wall -Irtl -s tb_precision_scan \
+		-o build/precision_ivl rtl/precision_scan.sv tb/tb_precision_scan.sv
+	$(VVP) build/precision_ivl +VECTORS=build/model_scan_vectors.txt
+
+scan-verilator: research-vectors
+	$(VERILATOR) --binary --timing -j 2 -Irtl --top-module tb_precision_scan \
+		--Mdir build/precision_vlt -o precision_tb \
+		rtl/precision_scan.sv tb/tb_precision_scan.sv
+	build/precision_vlt/precision_tb +VECTORS=build/model_scan_vectors.txt
+
+scan-synth:
+	@mkdir -p build
+	$(YOSYS) -l build/precision_scan_yosys.log -p 'read_verilog -sv rtl/precision_scan.sv; hierarchy -top precision_scan; proc; opt; check -assert; synth -top precision_scan; stat'
+
+scan-test: research-check scan-lint scan-iverilog scan-verilator
+
+# Source-generated scan vectors must be evaluated by actual RTL simulation.
+# The trace contains only outputs consumed on out_valid && out_ready.
+scan-rtl-classify-iverilog: research-vectors
+	$(IVERILOG) -g2012 -Wall -Irtl -s tb_precision_scan \
+		-o build/precision_ivl rtl/precision_scan.sv tb/tb_precision_scan.sv
+	$(VVP) build/precision_ivl +VECTORS=build/model_scan_vectors.txt +TRACE=build/precision_scan_outputs_iverilog.txt
+	$(PYTHON) -m model.rtl_classifier --trace build/precision_scan_outputs_iverilog.txt --samples 50 --output build/rtl_classifier_iverilog.json
+
+scan-rtl-classify-verilator: research-vectors
+	$(VERILATOR) --binary --timing -j 2 -Irtl --top-module tb_precision_scan \
+		--Mdir build/precision_vlt -o precision_tb \
+		rtl/precision_scan.sv tb/tb_precision_scan.sv
+	build/precision_vlt/precision_tb +VECTORS=build/model_scan_vectors.txt +TRACE=build/precision_scan_outputs_verilator.txt
+	$(PYTHON) -m model.rtl_classifier --trace build/precision_scan_outputs_verilator.txt --samples 50 --output build/rtl_classifier_verilator.json
+
+# Release gates exercise the trained-model scan, not just synthetic vectors.
+.PHONY: research-ci release-check release-verify
+research-ci: research-check scan-lint scan-rtl-classify-iverilog scan-rtl-classify-verilator release-verify
+
+release-verify:
+	$(PYTHON) tools/verify_release.py --build-dir build
+
+# This includes generic-cell structural synthesis, not device place-and-route.
+release-check: research-ci scan-synth

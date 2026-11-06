@@ -1,0 +1,54 @@
+name: mamba-hybrid-regression
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  trained-scan:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: requirements-research.txt
+      - name: Install Python and EDA dependencies
+        run: |
+          python -m pip install -r requirements-research.txt
+          sudo apt-get update
+          sudo apt-get install -y iverilog verilator yosys
+      - name: Python numerical and classifier tests
+        run: python -m unittest discover -s tests -v
+      - name: Trained-model scan lint and both simulator regressions
+        run: make -f Makefile.research research-ci
+      - name: Structural synthesis of recurrent scan
+        run: make -f Makefile.research scan-synth > build/synthesis_ci.log 2>&1
+      - name: Upload comparison reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: trained-scan-evidence
+          path: |
+            build/rtl_classifier_iverilog.json
+            build/rtl_classifier_verilator.json
+            build/model_scan_vectors.json
+            build/synthesis_ci.log
+          if-no-files-found: warn
+
+  legacy-scalar-scan:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install simulators
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y iverilog verilator
+      - name: Legacy scalar-scan regression
+        run: make reference lint directed verilator iverilog

@@ -1,0 +1,21 @@
+digraph system {
+  graph [rankdir=LR, bgcolor="white", pad=0.25, nodesep=0.42, ranksep=0.6,
+         fontname="DejaVu Sans", fontsize=12, label="Mamba-derived inference: demonstrated and planned boundaries", labelloc=t];
+  node [shape=box, style="rounded,filled", fontname="DejaVu Sans", fontsize=10,
+        fillcolor="#f3f6fb", color="#6e7a90", fontcolor="#1e293b", margin="0.18,0.12"];
+  edge [color="#475569", arrowsize=0.65];
+  input [label="Input image\n8 rows × 8 features", fillcolor="#edf7f8"];
+  proj [label="Input and gate projections\n8 → 8", fillcolor="#eef2ff"];
+  conv [label="Causal depthwise Conv1D\nKernel = 3 / ReLU", fillcolor="#eef2ff"];
+  params [label="Selective coefficients\nΔ, A, B, C; Tustin", fillcolor="#eef2ff"];
+  scan [label="Precision-adaptive\nrecurrent scan RTL\n8 channels × 4 poles", fillcolor="#e0f0ff", color="#2472b7", penwidth=2];
+  out [label="Skip, gate, output projection\nand 10-class head", fillcolor="#eef2ff"];
+  result [label="Digit prediction\n0–9", fillcolor="#edf7f8"];
+  input->proj->conv->params->scan->out->result;
+  model [label="CPU/PyTorch in current hybrid test",shape=note, fillcolor="#fff8e8", color="#cd9e55"];
+  impl [label="RTL candidate; WSL simulation required",shape=note,fillcolor="#fff8e8",color="#cd9e55"];
+  {rank=same;params;model}
+  {rank=same;scan;impl}
+  model->params[style=dotted,arrowhead=none];
+  impl->scan[style=dotted,arrowhead=none];
+}

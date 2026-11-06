@@ -1,0 +1,71 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 610" role="img" aria-labelledby="heading description">
+<title id="heading">FPGA_Mamba selective-scan RTL datapath</title>
+<desc id="description">Input and time-dependent coefficients feed a state-update multiplier-accumulator and a separate output multiplier-accumulator. State and output registers update only when the input handshake succeeds.</desc>
+<defs>
+  <marker id="arrow" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0 0 L9 4.5 L0 9 Z" fill="#53677e"/></marker>
+  <marker id="tealarrow" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0 0 L9 4.5 L0 9 Z" fill="#207b77"/></marker>
+  <style>
+  .title{font:600 28px Arial,Helvetica,sans-serif;fill:#13263e}.sub{font:15px Arial,Helvetica,sans-serif;fill:#5d728b}
+  .label{font:600 18px Arial,Helvetica,sans-serif;fill:#1e344d}.body{font:15px Arial,Helvetica,sans-serif;fill:#38506a}
+  .small{font:13px Arial,Helvetica,sans-serif;fill:#60758c}.math{font:18px Arial,Helvetica,sans-serif;fill:#263c55}
+  .pipe{fill:none;stroke:#53677e;stroke-width:2;marker-end:url(#arrow)}.feedback{fill:none;stroke:#207b77;stroke-width:2.5;marker-end:url(#tealarrow)}
+  </style>
+</defs>
+<rect width="1280" height="610" fill="#ffffff"/>
+<text x="52" y="52" class="title">FPGA_Mamba / selective_scan</text>
+<text x="52" y="80" class="sub">Implemented: diagonal, token-dependent Q4.12 state-space recurrence; 16-bit signed lanes</text>
+<line x1="52" y1="100" x2="1228" y2="100" stroke="#dbe5ee" stroke-width="1.5"/>
+
+<!-- Inputs -->
+<rect x="52" y="148" width="245" height="96" rx="12" fill="#eaf2ff" stroke="#a5bfdf"/>
+<text x="72" y="177" class="label">Input transaction</text>
+<text x="72" y="202" class="body">x[t], a[t], b[t], c[t]</text>
+<text x="72" y="224" class="small">LANES × 16-bit Q4.12</text>
+
+<!-- State update -->
+<rect x="347" y="125" width="288" height="206" rx="14" fill="#f5f8fc" stroke="#b8c9d9" stroke-width="1.7"/>
+<text x="369" y="161" class="label">State update</text>
+<text x="369" y="197" class="math">a[t] · h[t−1] + b[t] · x[t]</text>
+<rect x="368" y="221" width="245" height="76" rx="9" fill="#fff3e3" stroke="#eccd95"/>
+<text x="381" y="245" class="body">2 × signed 16×16 products</text>
+<text x="381" y="267" class="body">34-bit sum; shift, saturate</text>
+<text x="381" y="286" class="small">result: h[t], signed 16-bit</text>
+
+<!-- Output -->
+<rect x="686" y="125" width="279" height="206" rx="14" fill="#f5f8fc" stroke="#b8c9d9" stroke-width="1.7"/>
+<text x="708" y="161" class="label">Output calculation</text>
+<text x="708" y="197" class="math">c[t] · h[t] + D · x[t]</text>
+<rect x="708" y="221" width="235" height="76" rx="9" fill="#fff3e3" stroke="#eccd95"/>
+<text x="721" y="245" class="body">2 × signed 16×16 products</text>
+<text x="721" y="267" class="body">34-bit sum; shift, saturate</text>
+<text x="721" y="286" class="small">D = 0.5, Q4.12</text>
+
+<!-- Output register -->
+<rect x="1017" y="155" width="211" height="143" rx="12" fill="#e6f3ef" stroke="#88bbb0" stroke-width="1.7"/>
+<text x="1038" y="186" class="label">Output register</text>
+<text x="1038" y="215" class="math">y[t]</text>
+<text x="1038" y="244" class="body">out_valid</text>
+<text x="1038" y="269" class="small">one-entry output buffer</text>
+
+<path d="M297 194 H337" class="pipe"/>
+<path d="M635 220 H676" class="pipe"/>
+<path d="M965 220 H1007" class="pipe"/>
+
+<!-- State feedback register -->
+<rect x="347" y="400" width="288" height="100" rx="12" fill="#e6f3ef" stroke="#88bbb0" stroke-width="1.7"/>
+<text x="369" y="432" class="label">Recurrent state register</text>
+<text x="369" y="460" class="body">h[t−1] → h[t] on transfer</text>
+<text x="369" y="481" class="small">sequence_start selects zero state</text>
+<path d="M490 331 V390" class="feedback"/>
+<path d="M347 450 H323 V342 H391 V331" class="feedback"/>
+
+<!-- Handshake -->
+<rect x="686" y="400" width="542" height="100" rx="12" fill="#f1f5fa" stroke="#c0cfdf" stroke-width="1.4"/>
+<text x="709" y="432" class="label">Streaming control</text>
+<text x="709" y="457" class="body">in_ready = !out_valid || out_ready</text>
+<text x="709" y="482" class="body">No accepted token → no state update; output stalls are lossless</text>
+<path d="M1122 298 V390" stroke="#8198b3" stroke-width="1.6" stroke-dasharray="5,4" fill="none"/>
+
+<line x1="52" y1="548" x2="1228" y2="548" stroke="#e0e8f0"/>
+<text x="52" y="579" class="small">Arithmetic: signed multiplication → full-width addition → arithmetic right shift by FRAC=12 → 16-bit saturation.</text>
+</svg>
