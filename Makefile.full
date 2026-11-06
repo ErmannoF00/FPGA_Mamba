@@ -1,0 +1,43 @@
+PYTHON ?= python3
+IVERILOG ?= iverilog
+VERILATOR ?= verilator
+YOSYS ?= yosys
+FULL_ROM := weights/full_rom
+RTL_FULL := rtl/precision_scan.sv rtl/mamba_full_top.sv
+
+.PHONY: full-reference full-export full-lint full-iverilog full-iverilog-smoke full-verilator full-synth full-check
+
+full-reference:
+	$(PYTHON) -m unittest tests.test_full_integer -v
+
+full-export:
+	@mkdir -p build $(FULL_ROM)
+	$(PYTHON) -m model.export_full --checkpoint weights/digits_bilinear.pt \
+		--bits results/precision64.json --out $(FULL_ROM) --samples 360
+
+full-lint: full-export
+	$(VERILATOR) --lint-only --timing -Wall -Irtl --top-module mamba_full_top $(RTL_FULL)
+
+full-iverilog-smoke: full-export
+	@mkdir -p build
+	$(IVERILOG) -g2012 -Irtl -s tb_full_mamba -o build/full_ivl \
+		$(RTL_FULL) tb/tb_full_mamba.sv
+	$(VVP) build/full_ivl +VECTORS=$(FULL_ROM)/images_expected.txt +SAMPLES=8
+
+full-iverilog: full-export
+	@mkdir -p build
+	$(IVERILOG) -g2012 -Irtl -s tb_full_mamba -o build/full_ivl \
+		$(RTL_FULL) tb/tb_full_mamba.sv
+	$(VVP) build/full_ivl +VECTORS=$(FULL_ROM)/images_expected.txt +SAMPLES=360
+
+full-verilator: full-export
+	$(VERILATOR) --binary --timing -j 2 -Irtl --top-module tb_full_mamba \
+		--Mdir build/full_vlt -o full_tb $(RTL_FULL) tb/tb_full_mamba.sv
+	build/full_vlt/full_tb +VECTORS=$(FULL_ROM)/images_expected.txt +SAMPLES=360
+
+full-synth: full-export
+	@mkdir -p build
+	$(YOSYS) -l build/full_yosys.log -p \
+		'read_verilog -sv -Irtl $(RTL_FULL); hierarchy -top mamba_full_top; proc; opt; check -assert; synth -top mamba_full_top; stat'
+
+full-check: full-reference full-lint full-iverilog full-verilator

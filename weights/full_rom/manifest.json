@@ -1,0 +1,8 @@
+{
+  "samples": 360,
+  "integer_accuracy": 0.9611111111111111,
+  "pytorch_accuracy": 0.9611111111111111,
+  "prediction_agreement": 0.9861111111111112,
+  "rtl_scope": "input image to 10 logits; Python integer oracle, pending RTL execution",
+  "format": "signed Q6.10; nearest-even; saturating 16-bit; 32 states"
+}

@@ -1,0 +1,47 @@
+PYTHON ?= python3
+IVERILOG ?= iverilog
+VVP ?= vvp
+VERILATOR ?= verilator
+YOSYS ?= yosys
+
+SERIAL_RTL := rtl/precision_scan.sv rtl/mamba_serial_top.sv
+SERIAL_TB := tb/tb_full_mamba_serial.sv
+VECTORS := weights/full_rom/images_expected.txt
+.PHONY: serial-reference serial-lint serial-smoke serial-iverilog serial-verilator serial-coarse serial-synth serial-check
+
+serial-reference:
+	$(PYTHON) -m unittest tests.test_full_integer -v
+
+# Export weights beforehand with `make -f Makefile.full full-export`.
+# Deliberately do not require Python/Torch for RTL-only synthesis.
+serial-lint:
+	$(VERILATOR) --lint-only --timing -Wall -Irtl --top-module mamba_serial_top $(SERIAL_RTL)
+
+serial-smoke:
+	@mkdir -p build
+	$(IVERILOG) -g2012 -Irtl -s tb_full_mamba_serial -o build/serial_ivl $(SERIAL_RTL) $(SERIAL_TB)
+	$(VVP) build/serial_ivl +VECTORS=$(VECTORS) +SAMPLES=8
+
+serial-iverilog:
+	@mkdir -p build
+	$(IVERILOG) -g2012 -Irtl -s tb_full_mamba_serial -o build/serial_ivl $(SERIAL_RTL) $(SERIAL_TB)
+	$(VVP) build/serial_ivl +VECTORS=$(VECTORS) +SAMPLES=360
+
+serial-verilator:
+	$(VERILATOR) --binary --timing -j 2 -Irtl --top-module tb_full_mamba_serial \
+	    --Mdir build/serial_vlt -o serial_tb $(SERIAL_RTL) $(SERIAL_TB)
+	build/serial_vlt/serial_tb +VECTORS=$(VECTORS) +SAMPLES=360
+
+# Structural sanity without full technology mapping. Time limited to 3 minutes.
+serial-coarse:
+	@mkdir -p build
+	timeout 180s $(YOSYS) -l build/serial_coarse.log -p \
+	    'read_verilog -sv -Irtl $(SERIAL_RTL); hierarchy -top mamba_serial_top; proc; opt; check -assert; stat'
+
+# Full generic synthesis. 10-minute guard prevents runaway resource use.
+serial-synth:
+	@mkdir -p build
+	timeout 600s $(YOSYS) -l build/serial_yosys.log -p \
+	    'read_verilog -sv -Irtl $(SERIAL_RTL); hierarchy -top mamba_serial_top; proc; opt; check -assert; synth -top mamba_serial_top; stat'
+
+serial-check: serial-reference serial-lint serial-smoke serial-iverilog serial-verilator
