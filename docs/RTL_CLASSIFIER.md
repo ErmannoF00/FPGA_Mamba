@@ -1,51 +1,28 @@
-# Trained-model classification using RTL scan outputs
+# Classification from RTL scan outputs
 
-This integration stage feeds **actual outputs of the RTL recurrent scan** into the
-trained output projection, gate and classification head implemented in PyTorch.
-It does **not** implement these front-end/back-end operators in RTL. Therefore
-it is a hardware-in-the-loop *simulation*, not FPGA inference.
+The integration test replaces the recurrent-scan output tensor in a trained PyTorch model with values emitted by SystemVerilog simulation. It does not replace the projections, convolution, gate or final classifier with RTL.
 
-## Data contract
+## Data format
 
-The `model.export_scan_vectors` exporter builds the sequence of 400 recurrent
-transactions (50 images × 8 row tokens) and a randomized ready/valid schedule.
-The testbench compares the RTL buses cycle by cycle with the independent
-integer reference. With `+TRACE=build/precision_scan_outputs.txt`, it writes
-one 128-bit output per **consumed** output transaction, not per clock cycle.
-The first hexadecimal word represents sample 0, token 0; the least significant
-16 bits correspond to output channel 0. There must be exactly 400 lines.
+Fifty held-out digit images produce 400 scan transactions (eight row tokens per image). The vector exporter supplies Q6.10 `u`, `alpha`, `excitation`, `c` and `skip` buses to `precision_scan.sv`. The testbench compares each cycle with the independent integer model.
 
-The host parser converts every signed Q6.10 word back to an integer tensor
-`(50, 8, 8)`, checks each element against the software recurrence, injects
-the RTL-produced scan outputs into the actual trained PyTorch output projection
-and classification head, and records every predicted digit. It also compares
-the resulting logits against the integer reference and floating-point model.
+A consumed output transfer occurs only when `out_valid && out_ready`. With `+TRACE=<path>`, the testbench writes one 128-bit hexadecimal word for each such transfer. A complete 50-image trace contains 400 lines. Channel zero occupies the least significant 16 bits.
 
-## Commands
+`model.rtl_classifier` parses the trace into signed integer values with shape `(50, 8, 8)`. It compares each element with the integer software reference and supplies the actual RTL values to the trained PyTorch output path. It then compares logits and predictions with the integer reference and original model, saving per-image results.
+
+## Run
 
 ```bash
-cd ~/projects/FPGA_Mamba
-python3 -m unittest tests.test_rtl_classifier -v
 make -f Makefile.research scan-rtl-classify-iverilog
 make -f Makefile.research scan-rtl-classify-verilator
-cat build/rtl_classifier.json
+make -f Makefile.research release-verify
+
+cat build/rtl_classifier_iverilog.json
+cat build/rtl_classifier_verilator.json
 ```
 
-If the trace has fewer than 400 output handshakes, the parser fails; if one
-signed channel disagrees with the reference, the classifier fails before
-producing a misleading accuracy result. The report contains input-checkpoint
-and RTL-trace hashes, per-image labels/predictions, and logit differences.
+The release verifier rejects missing outputs, malformed hexadecimal words, inconsistent per-image predictions, incorrect checksums and mismatches between simulators.
 
-## Boundaries and next experiments
+## Hardware boundary
 
-1. Replace the PyTorch input projection, convolution, selective-parameter
-   generator, gate, output projection and classifier head with specified and
-   independently tested hardware modules.
-2. Treat the state-precision map as **compile-time configured**, not adaptive
-   per token. Current `precision64.json` is a calibrated offline allocation.
-3. Implement hardware-selectable widths or packed narrow datapaths before
-   claiming dynamic precision or energy efficiency.
-4. Evaluate resource occupancy, fMAX, latency and power on a named FPGA using
-   vendor tools and, where possible, a physical board.
-5. Compare uncertainty/error-bound controllers against precision allocation
-   heuristics with matched memory, DSP and operating-frequency constraints.
+This result proves equivalence of the tested recurrent scan and its integer reference when driving a host classifier. It is not an FPGA implementation of the entire neural network. Complete on-device inference additionally needs parameter storage and transfer, projections, convolution, nonlinearities, the remaining output path and a device-specific top-level integration.

@@ -1,181 +1,120 @@
 # FPGA_Mamba
 
-A reproducible Mamba-derived sequence classifier and an experimental fixed-point selective-state-space datapath. The repository separates training, numerical verification, RTL simulation, and FPGA implementation. The available hardware implements the recurrent scan; the full neural network is **not** deployed on an FPGA.
+Fixed-point selective state-space inference with trained-model RTL verification.
 
-![System architecture](docs/research_architecture.svg)
+The project implements a Mamba-derived sequence classifier in PyTorch and a synthesizable, mixed-state-precision recurrent scan in SystemVerilog. The input projection, convolution, selective parameter generation, gate, output projection and classifier remain on the host. The scan consumes coefficients exported from the trained network. FPGA board execution is not included.
 
+![Model and RTL execution pipeline](docs/mamba_pipeline.png)
 
-### RTL-fed classification regression
+[Technical pipeline diagram (editable SVG)](docs/system_pipeline.svg) | [RTL datapath](docs/architecture.svg)
 
-The optional integration test extracts **consumed outputs from the RTL scan**
-and injects them into the trained PyTorch classifier head, with per-channel
-numerical equality checks and per-sample prediction reports. This is an
-end-to-end classification **simulation using RTL-produced scan outputs**, not
-a wholly RTL implementation or physical FPGA deployment. See
-[RTL classifier integration](docs/RTL_CLASSIFIER.md).
+## Results
 
-```bash
-python3 -m unittest tests.test_rtl_classifier -v
-make -f Makefile.research scan-rtl-classify-iverilog
-make -f Makefile.research scan-rtl-classify-verilator
-make -f Makefile.research release-verify
-```
+| Measurement | Result |
+| :--- | ---: |
+| Bilinear model test accuracy | 96.11% on 360 held-out digit images |
+| ZOH model test accuracy | 95.56% on the same test set |
+| RTL-fed classification | 49/50 correct (98%) |
+| RTL vs integer-reference logits | Maximum absolute difference: 0 |
+| RTL recurrent output transfers | 400, across 712 test cycles |
+| Icarus / Verilator | Both passed the trained-model scan regression |
+| Scalar-scan regression | 7,200 comparisons per simulator, four lanes |
+| Generic Yosys mapped logic | 159,012 cells for `precision_scan` |
 
-## Verified RTL-assisted prediction result
+The 50-image inference experiment uses RTL-computed recurrent outputs and a PyTorch classifier head. The 98% result is not a full-RTL or FPGA-board accuracy measurement. The synthesis cell count is technology-independent; no LUT, DSP, power or timing result is claimed.
 
-The **recurrent scan** produced 400 consumed outputs from 50 held-out handwritten-digit images under a 712-cycle ready/valid stimulus. The Icarus Verilog run reported **49/50 correct predictions (98%)** after the RTL outputs were injected into the trained PyTorch classifier. Its final logits agreed exactly with the independent integer scan reference; 1 prediction differed from the floating-point model. The Verilator scan passed the same 712 cycle vector regression. **The latest supplied log does not yet show a Verilator classifier-injection report.** The release gate below runs both complete paths and asserts that their traces match.
+## Architecture
 
-```bash
-make -f Makefile.research release-check
-```
+The dataset is `sklearn.datasets.load_digits`. Each 8 × 8 image is processed as eight tokens with eight values per token. The trainable network uses input and gate projections, causal depthwise convolution, selective state-space parameters, output gating, an output projection, residual addition and a ten-class head.
 
-This gate runs Python tests, trained-model scan simulation and RTL-assisted classification in **both** simulators, numerical/trace comparison, and generic logic synthesis. It **does not** imply that the projections, convolution, gating or classifier are implemented in FPGA fabric. `scan-synth` reports generic mapped cells, not FPGA LUTs, DSPs, timing or power.
-
-See [Release evidence and limitations](docs/RELEASE_EVIDENCE.md).
-
-## Scope
-
-The model processes the 8 × 8 handwritten-digit images supplied by `sklearn.datasets.load_digits` as eight sequential 8-feature tokens. It contains input and gate projections, a causal depthwise convolution, learned selective coefficients, a diagonal recurrent state-space layer, output gating/projection, and a 10-class classification head. This is a compact Mamba-derived architecture, **not** a drop-in implementation of official Mamba-1 or Mamba-2 checkpoints.
-
-The hardware consists of two separate cores:
-
-- `rtl/selective_scan.sv`: the original signed Q4.12 scalar-per-lane recurrence with backpressure. Its testbench was rewritten to avoid simulator-specific `$fscanf` signal-update behavior.
-- `rtl/precision_scan.sv`: an experimental Q6.10 multi-state scan with 8 channels × 4 poles, individually parameterized state fractional precision, and clocked ready/valid transactions. Its model coefficients are supplied externally.
-
-The second core is the research extension. It does **not** implement convolution, parameter generation, gating, the classifier head, DDR, DMA, or a device-specific FPGA top.
-
-## Mathematical model
-
-For token `t`, channel `d`, and pole `n`, the real-valued diagonal state-space recurrence is
+The recurrent scan implements eight channels and four states per channel. For channel `d`, state index `n` and token `t`:
 
 \[
- h_{t,d,n}=\bar a_{t,d,n}h_{t-1,d,n}+e_{t,d,n},\qquad
- y_{t,d}=\sum_{n=0}^{3}c_{t,n}h_{t,d,n}+D_d u_{t,d}.
+h_{t,d,n}=\bar a_{t,d,n}h_{t-1,d,n}+e_{t,d,n},
+\qquad
+ y_{t,d}=\sum_n C_{t,n}h_{t,d,n}+D_d u_{t,d}.
 \]
 
-The continuous-time diagonal poles are negative. The trained model quantizes each input-dependent time step to a four-entry codebook `Δ ∈ {0.125, 0.25, 0.5, 1.0}`. The bilinear (Tustin) coefficients are
+`rtl/precision_scan.sv` receives quantized `alpha`, `excitation`, `c`, `skip` and `u` values from the model. It does not calculate projections or discretization coefficients internally.
+
+### Discretization and quantization
+
+The trained model supports zero-order hold (ZOH) and bilinear (Tustin) discretization of diagonal continuous-time poles. For the bilinear variant:
 
 \[
- \bar a=\frac{1+\Delta A/2}{1-\Delta A/2},\qquad
- \bar b=\frac{\Delta}{1-\Delta A/2}.
+\bar a=\frac{1+\Delta A/2}{1-\Delta A/2},
+\qquad
+\bar b=\frac{\Delta}{1-\Delta A/2}.
 \]
 
-The excitation sent to the scan is the quantized value of `\bar b B_t u_t`. A separate zero-order-hold (ZOH) model is provided as an ablation; ZOH and bilinear discretization are established techniques, not claimed inventions.
+The external RTL interface uses signed 16-bit Q6.10. Each state uses six integer/sign bits and a compile-time selected number of fractional bits, `p[d,n]`. Arithmetic includes nearest-even rescaling, signed saturation and a ready/valid streaming interface. The bit allocation in `results/precision64.json` is calibrated offline and emitted to `rtl/precision_config.svh`; it does not change at runtime.
 
-### Numerical contract
+The retained `rtl/selective_scan.sv` is a separate Q4.12, scalar-per-lane baseline with its own verification suite.
 
-The external scan buses use signed 16-bit Q6.10. Multiplication and state accumulation use explicitly signed intermediate values, nearest-even integer rescaling, and signed saturation. State `(d,n)` stores `6 + p[d,n]` bits in signed Q6.`p[d,n]` format, where `p` is a compile-time constant in `[0, 10]`.
+## Reproduce
 
-The file `rtl/precision_config.svh` is generated from `results/precision64.json`. A 4-bit constant per state configures the RTL `generate` blocks. Each valid token updates all 32 states. State updates occur only on `in_valid && in_ready`, and the output is retained while `out_valid && !out_ready`. `sequence_start` clears the previous sequence state for the accepted token. `rst_n` asynchronously resets state and output valid/data.
-
-### Research hypothesis: state precision allocation
-
-Uniform precision ignores differing state sensitivities. This repository evaluates a *calibrated* allocation that combines single-pole logit perturbations with a lifetime term derived from the Tustin pole magnitude. Its dynamic-programming allocator minimizes an **additive calibration proxy** under a fixed total state-bit budget. It does not provide a certified end-to-end network error bound.
-
-For one contractive state with `|\bar a_t| ≤ ρ < 1` and rounding noise `|\eta_t| ≤ ε`, the propagated error obeys
-
-\[
- |E_t|\le ρ^t|E_0|+\epsilon\frac{1-ρ^t}{1-ρ}.
-\]
-
-This motivates higher precision for longer-lived states. Output sensitivity and numerical calibration matter as well. The current allocation is an experimental co-design idea; **research novelty has not been established against all relevant prior work**.
-
-## Reproduce the software results
-
-Use Linux or WSL, Python 3.10+, and a clean virtual environment. Existing WSL dependencies can be reused.
+Requirements: Python 3.10 or later, PyTorch, NumPy, scikit-learn, Icarus Verilog, Verilator, Yosys and GNU Make. The checked-in checkpoints are small and avoid retraining for the verification path.
 
 ```bash
-cd ~/projects/FPGA_Mamba
-# An existing environment with torch/sklearn/pytest may be used.
-source ~/projects/Embedded_SNN/.venv/bin/activate
+python3 -m venv .venv
+source .venv/bin/activate
 python -m pip install -r requirements-research.txt
 
-make -f Makefile.research research-check
 make -f Makefile.research research-evaluate
-make -f Makefile.research research-hybrid
-make -f Makefile.research research-precision
+make -f Makefile.research release-check
+make reference lint directed verilator iverilog
 ```
 
-To train again, rather than using the included small checkpoints:
+`release-check` runs numerical tests, Verilator lint, trained-model vector export, scan simulation in Icarus and Verilator, classifier injection, comparison of the two simulator traces and Yosys synthesis. Generated traces and reports are placed in `build/`.
+
+To inspect the independent RTL-fed classification reports:
+
+```bash
+cat build/rtl_classifier_iverilog.json
+cat build/rtl_classifier_verilator.json
+```
+
+Retraining from the fixed split and seed:
 
 ```bash
 python -m model.train --scheme bilinear --epochs 32 --seed 19 --output build/bilinear
 python -m model.train --scheme zoh --epochs 32 --seed 19 --output build/zoh
 ```
 
-The fixed split contains 1,149 training, 288 validation and 360 test images, with no overlap. Dataset samples are real handwritten digits, although this is a small benchmark and not a representative large-scale Mamba workload.
+Retraining may produce different checkpoints if library versions or numerical kernels differ. The included checkpoints are used for the recorded results.
 
-## RTL regression on trained-model inputs
+## State precision experiment
 
-The recurrent scan receives real tokens produced by a trained model. The rest of the network runs on the host: this is **hybrid co-simulation**, not complete FPGA inference.
+A validation-set calibration procedure assigns fractional precision to each recurrent state under a fixed bit budget. The supplied 32-state configuration uses 64 fractional bits across all states. Including six integer/sign bits per state, its nominal state storage is 256 bits versus 512 bits for a uniform 16-bit representation.
 
-```bash
-make -f Makefile.research research-vectors
-make -f Makefile.research scan-lint
-make -f Makefile.research scan-iverilog
-make -f Makefile.research scan-verilator
-make -f Makefile.research scan-synth
-```
+At an equal precision budget, the recorded held-out logit MSE relative to the full-Q6.10 scan is 0.3110 for calibrated allocation and 0.3893 for uniform two-fractional-bit state storage. The calibrated configuration does not improve held-out accuracy relative to the uniform two-bit comparison. Register-bit totals are theoretical; a physical FPGA resource reduction has not been measured.
 
-`research-vectors` builds 50 held-out image sequences (400 scan tokens), with deterministic stalls, bubbles, resets, and sequence boundaries. It writes `build/model_scan_vectors.txt` and a summary report. Both simulators compare the entire scan output and handshake against a separately coded integer reference; **the trained-model scan passed 712 cycles in both Icarus and Verilator in the reported WSL run**.
+This is an offline precision-allocation experiment, not a runtime precision scheduler or a demonstrated research novelty claim.
 
-The older Q4.12 core has its own reference and test targets:
-
-```bash
-make reference
-make lint
-make directed
-make verilator
-make iverilog
-make synth
-```
-
-The legacy randomized Verilator regression previously failed at cycle 4. The corrected testbench subsequently passed 7,200 cycle comparisons in Verilator and 7,200 in Icarus across three seeds and four lanes.
-
-## Measured software results
-
-These are deterministic CPU/PyTorch results from the included checkpoints. They are **not** FPGA throughput, area, power, or board measurements.
-
-| Experiment | Result |
-|---|---:|
-| Bilinear + QAT test accuracy, 360 digits | 96.11% |
-| ZOH + QAT test accuracy, 360 digits | 95.56% |
-| Full-precision integer-scan hybrid vs PyTorch logits | Exact agreement (360 digits) |
-| Mixed-precision integer-scan hybrid test accuracy | 96.11% (360 digits) |
-| Uniform state precision at 2 fractional bits: logit MSE vs Q6.10 | 0.3893 |
-| Calibrated precision at equal bit budget: logit MSE vs Q6.10 | 0.3110 |
-| State storage for uniform Q6.10, 32 poles | 512 bits |
-| State storage for mixed precision, 32 poles | 256 bits |
-
-The state-storage numbers are theoretical register-bit counts only, not mapped FPGA FF counts or total area. The 20.1% lower logit MSE is a result on this particular dataset/checkpoint; **the calibrated model does not improve held-out classification accuracy** relative to the uniform 2-bit state experiment.
-
-The software allocator was fitted on validation data. Test labels were not used to select its bit map. Full experimental records are in `results/`.
-
-## Repository layout
+## Source layout
 
 ```text
-rtl/                      Fixed-point recurrence RTL
-  selective_scan.sv       Original Q4.12 scan
-  precision_scan.sv       Candidate mixed-precision Q6.10 scan
-  precision_config.svh    Generated compile-time state bit map
-model/                    Training, evaluation, integer replay, bit allocation
-tb/                       Directed and file-driven HDL testbenches
-tests/                    Python unit and equivalence tests
-weights/                  Small trained PyTorch checkpoints
-results/                  Recorded software evaluation metrics
-docs/                     Editable architecture diagrams and research notes
-Makefile.research         Explicit research/RTL targets
+rtl/                     Synthesizable selective-scan modules
+model/                   Model training, evaluation, integer reference, export
+python/                  Scalar fixed-point oracle and vector generator
+tb/                      SystemVerilog testbenches
+tests/                   Python numerical and integration tests
+weights/                 Trained digit-classifier checkpoints
+results/                 Recorded calibration and evaluation data
+docs/                    Architecture figures, verification and experiments
+tools/                   Release report validation
+Makefile                  Scalar-scan build and verification
+Makefile.research         Trained-model scan and release verification
 ```
 
-## Limitations and required hardware work
+Additional information: [Verification](docs/verification.md), [RTL-fed inference](docs/RTL_CLASSIFIER.md), [Precision experiment](docs/RESEARCH.md), [Measured evidence](docs/RELEASE_EVIDENCE.md).
 
-The present project **does not yet run all network layers on an FPGA**. A complete implementation requires the projection MACs, convolution and activation hardware, coefficient lookup/generation, parameter SRAM/BRAM, gated output path, classification head, DMA and a device-specific top-level interface. Quantization of those remaining blocks must be verified against the actual trained checkpoint. The mixed-precision RTL requires Verilator/Icarus equivalence, Yosys structural synthesis, device-specific place-and-route, and measurement on a physical FPGA.
+## Limitations
 
-A speedup or energy-efficiency claim is not justified until the reference and optimized designs are both implemented and measured on the same device under consistent constraints. The classification task is a proof of model inference, not evidence of general LLM/vision Mamba acceleration.
+The model is Mamba-derived, not a compatible implementation of official Mamba-1 or Mamba-2 weights. The supplied recurrent scan is synthesizable, but no board-specific FPGA top, weight-loading subsystem, complete RTL network, placement, timing closure or power measurement is provided. An FPGA accelerator requires these components and full-network quantization verification before a deployment or performance claim.
 
 ## References
 
-- Gu and Dao, *Mamba: Linear-Time Sequence Modeling with Selective State Spaces*, 2023, https://arxiv.org/abs/2312.00752
-- Wei et al., *LightMamba: Efficient Mamba Acceleration on FPGA with Quantization and Hardware Co-design*, 2025, https://arxiv.org/abs/2502.15260
-- Lyu et al., *ViM-Q: Scalable Algorithm-Hardware Co-Design for Vision Mamba Model Inference on FPGA*, 2026, https://arxiv.org/abs/2605.01935
-- SSMA: *A Memory-Efficient Accelerator for State Space Model in the Mamba*, ISCAS 2025, DOI 10.1109/ISCAS56072.2025.11044026
+- A. Gu and T. Dao, [Mamba: Linear-Time Sequence Modeling with Selective State Spaces](https://arxiv.org/abs/2312.00752), 2023.
+- [LightMamba: Efficient Mamba Acceleration on FPGA with Quantization and Hardware Co-design](https://arxiv.org/abs/2502.15260), 2025.
+- [ViM-Q: Scalable Algorithm-Hardware Co-Design for Vision Mamba Model Inference on FPGA](https://arxiv.org/abs/2605.01935), 2026.

@@ -1,39 +1,38 @@
-# State precision experiment
+# Recurrent state precision allocation
 
-## Research question
+## Question
 
-For a fixed signed integer range, does allocating recurrent state fractional bits by pole persistence and output sensitivity reduce distortion relative to uniform allocation under an equal storage budget?
+Does per-state fractional precision selected from held-out calibration sensitivity reduce output distortion compared with a uniform state format under an identical state-bit budget?
 
-This is not a claim that mixed-precision SSM computation, bilinear discretization, or quantization-aware training is itself original. The contribution to evaluate is the specific state-allocation methodology, compile-time state-register specialization, and its trade-off against network-level output error after synthesis.
+## Model and method
 
-## Current model
+The classifier uses eight channels and four diagonal recurrent states per channel. The model supports bilinear or ZOH coefficient discretization. Its external scan values are signed Q6.10, while internal state fractional widths are configurable at synthesis time.
 
-A trained 8-channel, 4-state-per-channel classifier uses a four-bin time-step codebook and the bilinear transform. The original model operates with 16-bit Q6.10 internal fake quantization. Only recurrent state storage precision is varied in the initial experiments; all other arithmetic remains Q6.10.
+The calibration estimates the effect of quantizing individual states on network logits using the validation set. A pole-lifetime factor based on the maximum transition magnitude contributes a stability-related weight. A dynamic program minimizes the resulting additive proxy under an exact 64-fractional-bit budget. The selected map is stored in `results/precision64.json` and exported to `rtl/precision_config.svh`.
 
-The pole-conditioned allocator uses one-pole-at-a-time logit perturbations measured exclusively on the validation set, multiplied by a weak theoretical lifetime weight `1/(1-rho)`. A dynamic program minimizes the sum of these proxy costs at an exact total fractional-bit budget of 64. This is a heuristic that must be compared against stronger allocators and joint QAT.
+This method is heuristic and offline. It is not a certified error bound or a token-by-token adaptive-precision controller.
 
-## Reproducibility
+## Recorded test result
 
-- Deterministic seed 19; stratified train/validation/test split.
-- Compare bilinear and ZOH models with independent training under identical optimizer settings.
-- Evaluate precision maps on the same held-out 360 samples, and report both accuracy and numerical distortion.
-- Compare uniform 2 fractional bits per state to an equal-total-budget mixed map.
-- Reproduce integer recurrent scan outputs from model-derived coefficients before exercising RTL.
-- Run both Icarus Verilog and Verilator before accepting hardware equivalence.
+| State format | Logit MSE versus Q6.10 | Nominal state-storage bits |
+| :--- | ---: | ---: |
+| Uniform Q6.10 | 0 | 512 |
+| Uniform two fractional bits | 0.3893 | 256 |
+| Calibrated, 64 fractional bits total | 0.3110 | 256 |
 
-## Preliminary findings
+The calibrated configuration reduces logit MSE by approximately 20.1% compared with the uniform equal-budget format on the recorded checkpoint and data split. It does not establish an accuracy improvement over the uniform configuration, a hardware speedup or a reduction in mapped FPGA area.
 
-The included digit classifier obtains 96.11% test accuracy. Precision calibration reduces test logit MSE from 0.3893 to 0.3110 under an equal state-storage budget (a 20.1% reduction). That is not an improvement in test classification accuracy and does not yet establish resource or energy savings. A 50-example replay corpus exercises 400 recurrent scan tokens, including stalls and sequence boundaries. Its RTL simulation still requires confirmation on a machine with HDL tools.
+## Reproduce
 
-## Next architectural implementation
+```bash
+make -f Makefile.research research-evaluate
+make -f Makefile.research research-precision
+make -f Makefile.research research-hybrid
+make -f Makefile.research release-check
+```
 
-1. Make the coefficient generation path synthesizable: time-step bin, precomputed Tustin `(alpha,gain)` entries, B/C projections and excitation.
-2. Introduce a tiled BRAM-based weight store and a single configurable projection MAC engine; measure bottlenecks rather than fully unrolling every matrix.
-3. Integrate causal convolution, gate, output projection and 10-class head into a clocked top module.
-4. Export the exact trained parameter image and compare full-network logits and predictions against integer and PyTorch references.
-5. Route both fixed-precision and mixed-precision variants to the *same* FPGA target; report FF/LUT/DSP/BRAM usage, critical path, achieved frequency, latency and measured dynamic power where available.
-6. Extend to longer-sequence data and test whether the precision benefit persists as `rho` approaches one.
+The saved map in `results/precision64.json` is the release reference. `research-precision` writes a fresh map to `build/precision64.json`; it does not silently replace the checked-in configuration.
 
-## Novelty and falsification
+## Further work
 
-If mixed precision has greater hardware cost, changes predictions unacceptably, fails on longer sequences, or duplicates prior methods without a technical distinction, it is not a publishable improvement. Include these negative results rather than excluding them. Comparisons against uniform INT8/INT16 and existing quantization-focused Mamba FPGA accelerators are mandatory.
+A runtime implementation would require mode-dependent arithmetic, a conservative propagated-error invariant, mode-switch control logic and measurable hardware benefits. None of these is present in the checked-in RTL. Before claiming novelty, compare against uniform and calibrated fixed precision, alternate sensitivity metrics, and published FPGA SSM/Mamba quantization methods on matched workloads and FPGA devices.

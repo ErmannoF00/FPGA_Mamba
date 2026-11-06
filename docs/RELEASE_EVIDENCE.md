@@ -1,39 +1,31 @@
-# Release evidence and scope — November 2026
+# Recorded verification and measurements
 
-## Observed results (from the user's WSL logs)
+## Local WSL verification, November 2026
 
-| Test | Observation | Limits |
-|---|---|---|
-| Python unit tests | 18 tests passed in this review environment; user's 11 classifier/research tests passed | Not RTL execution |
-| Trained bilinear model | 96.11% / 360 held-out images | PyTorch accuracy |
-| ZOH control | 95.56% / 360 held-out images | Different trained checkpoint |
-| Scan simulation | 712 cycle comparisons PASS in Icarus and Verilator | Front end/head still in PyTorch |
-| Icarus trace capture | 400 consumed 128-bit scan outputs | 50 held-out images × 8 tokens |
-| Icarus RTL-fed classifier | 49/50 correct; 0 max logit difference vs integer reference | Hybrid, not on-board FPGA |
-| Yosys scan-only synthesis | 159,012 generic cells; 0 structural problems; 641 FF primitives | No target mapping, no timing, no power |
-| Runtime adaptive precision | Not implemented | State widths selected at elaboration |
-| FPGA device execution | Not performed | No board or implementation reports |
+| Test | Recorded outcome |
+| :--- | :--- |
+| Python tests | 18 passed |
+| Trained scan, Icarus | 712 cycles passed |
+| Trained scan, Verilator | 712 cycles passed |
+| RTL-consumed recurrent output trace | 400 outputs |
+| RTL-fed digit classification | 49 correct out of 50, Icarus report |
+| RTL versus integer software | 0 maximum logit error; no prediction changes |
+| RTL versus floating-point model | 1 different prediction on the 50-sample subset |
+| Four-lane scalar scan, Icarus | 3 seeds × 2,400 cycles passed |
+| Four-lane scalar scan, Verilator | 3 seeds × 2,400 cycles passed |
+| Research `release-check` | Exit code 0 |
+| Yosys 0.33 `precision_scan` | Zero structural problems, 159,012 generic mapped cells |
 
-## What is distinctive
+`release-check` includes both simulator paths and a verifier that compares their traces and predictions. The two standalone classification report files are generated locally in `build/` and are not checked into source control.
 
-A trainable, compact Mamba-derived classifier is coupled to an RTL scan with **individually sized state registers** using a calibration-derived precision map, comparing a bilinear discretization against a ZOH baseline. The current bit allocation is decided **offline**, not dynamically per token. The scan operates on coefficients exported by the software model, and the final classifier is executed on the host. The originality of offline per-pole width allocation has **not** been established against current literature. Avoid calling it a novel algorithm without systematic baselines and a literature review.
+The digits model has 96.11% bilinear and 95.56% ZOH accuracy over 360 held-out test images. The 98% RTL-fed accuracy is measured on a 50-image subset. Comparing those percentages directly without accounting for sample size would be misleading.
 
-## Mandatory release gates
+## State-width experiment
 
-1. `python3 -m unittest discover -s tests -v` — software contract.
-2. `make -f Makefile.research release-check` — lint, independent simulator traces, classifier injection, numerical checks and generic synthesis.
-3. `make reference lint directed verilator iverilog` — retained scalar-scan regression. The subsequent WSL rerun passed three seeds in both simulators (7,200 cycle comparisons per simulator, four lanes).
-4. `git diff --check`, `git status --short`, inspect every deletion (notably old MNIST modules); verify `.gitignore` excludes generated artifacts.
-5. Commit only intended source, documentation and small redistributable weights; do not commit `build/`, core dumps, datasets without license, or private files.
+The calibrated 32-state allocation uses 256 nominal register bits, compared with 512 bits for 32 full-precision signed 16-bit states. On the recorded test set, the logit mean-squared error for the calibrated allocation was 0.3110 versus 0.3893 for a uniform equal-budget allocation. These are software numerical results, not FPGA area or energy measurements.
 
-## What is required before claiming full FPGA inference
+## Boundaries
 
-- Quantized matrix-multiply hardware for input/gate/B/C/Δ/output projections and the classifier head.
-- Causal convolution, activation and gating hardware; coefficient lookup for bilinear poles.
-- Weight/activation storage interfaces and a controller scheduling complete sequences.
-- Bit-exact full-model RTL-to-software comparison, followed by FPGA-specific synthesis, place-and-route, timing closure and device execution.
-- Measurements against fixed-Q6.10 and equal-bit-budget alternatives on the **same device** before speed/energy/resource reduction claims.
+The RTL implements only the recurrent scan. Parameter generation, input/output projections, depthwise convolution, gate, residual path and classification head run in PyTorch. `precision_config.svh` is generated offline; no runtime precision controller is implemented. No FPGA synthesis target, placement, timing, device measurements or hardware energy estimates are supplied.
 
-## Research direction after this release
-
-A runtime error-budgeted precision controller is an attractive follow-up, but a compile-time width map does not implement it. A meaningful experiment requires: a formally specified quantization-error invariant, synthesizable mode selection, **physically narrower arithmetic**, and measured comparisons against static allocation and simpler heuristics. The scope of the current repository should not be expanded in its README before those experiments exist.
+These logs document the tested behavior without establishing performance improvements against published FPGA Mamba accelerators.

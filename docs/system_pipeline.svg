@@ -1,0 +1,125 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1770" height="650" viewBox="0 0 1770 650" role="img" aria-labelledby="diagram-title diagram-desc">
+<title id="diagram-title">Mamba-derived classification pipeline and RTL scan boundary</title>
+<desc id="diagram-desc">Eight input row tokens pass through a PyTorch model front end that generates input-dependent coefficients. A synthesizable fixed-point multi-state recurrent scan is tested in RTL. A PyTorch output path and classifier produce final predictions. Offline calibration configures per-state fractional precision at compile time.</desc>
+<defs><marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0L10,5L0,10Z" fill="#334155"/></marker><marker id="darr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0L10,5L0,10Z" fill="#2563eb"/></marker></defs>
+<rect width="1770" height="650" fill="white"/>
+<style>text{font-family:Arial,Helvetica,sans-serif;fill:#17253a} .head{font-size:23px;font-weight:700} .body{font-size:18px} .minor{font-size:16px;fill:#53657d} .tag{font-size:16px;font-weight:700;letter-spacing:1px} .equ{font-family:Georgia,serif;font-style:italic;font-size:22px} .frame{stroke:#b7c2d0;stroke-width:2;fill:#f8fafc} .blue{stroke:#2563eb;stroke-width:2.8;fill:#eef6ff} .accent{stroke:#94a3b8;stroke-width:1.7;fill:white} .path{stroke:#334155;stroke-width:2.5;fill:none;marker-end:url(#arr)} .dashed{stroke:#2563eb;stroke-width:2.2;stroke-dasharray:8 6;fill:none;marker-end:url(#darr)}</style>
+<rect x="22" y="38" width="1704" height="380" rx="14" class="accent"/>
+<rect x="48" y="116" width="184" height="224" rx="10" class="frame"/>
+<text x="140" y="148" class="head" text-anchor="middle" dominant-baseline="middle">Input sequence</text>
+<text x="140" y="180" class="minor" text-anchor="middle" dominant-baseline="middle">8 tokens × 8 values</text>
+<rect x="82.0" y="205.0" width="12.0" height="12.0" fill="#dfeaf8" stroke="#7794b5" stroke-width="0.7"/>
+<rect x="96.8" y="205.0" width="12.0" height="12.0" fill="#dfeaf8" stroke="#7794b5" stroke-width="0.7"/>
+<rect x="111.6" y="205.0" width="12.0" height="12.0" fill="#dfeaf8" stroke="#7794b5" stroke-width="0.7"/>
+<rect x="126.4" y="205.0" width="12.0" height="12.0" fill="#dfeaf8" stroke="#7794b5" stroke-width="0.7"/>
+<rect x="141.2" y="205.0" width="12.0" height="12.0" fill="#dfeaf8" stroke="#7794b5" stroke-width="0.7"/>
+<rect x="156.0" y="205.0" width="12.0" height="12.0" fill="#dfeaf8" stroke="#7794b5" stroke-width="0.7"/>
+<rect x="170.8" y="205.0" width="12.0" height="12.0" fill="#dfeaf8" stroke="#7794b5" stroke-width="0.7"/>
+<rect x="185.6" y="205.0" width="12.0" height="12.0" fill="#dfeaf8" stroke="#7794b5" stroke-width="0.7"/>
+<rect x="82.0" y="219.8" width="12.0" height="12.0" fill="#dfeaf8" stroke="#7794b5" stroke-width="0.7"/>
+<rect x="96.8" y="219.8" width="12.0" height="12.0" fill="#dfeaf8" stroke="#7794b5" stroke-width="0.7"/>
+<rect x="111.6" y="219.8" width="12.0" height="12.0" fill="#dfeaf8" stroke="#7794b5" stroke-width="0.7"/>
+<rect x="126.4" y="219.8" width="12.0" height="12.0" fill="#dfeaf8" stroke="#7794b5" stroke-width="0.7"/>
+<rect x="141.2" y="219.8" width="12.0" height="12.0" fill="#dfeaf8" stroke="#7794b5" stroke-width="0.7"/>
+<rect x="156.0" y="219.8" width="12.0" height="12.0" fill="#dfeaf8" stroke="#7794b5" stroke-width="0.7"/>
+<rect x="170.8" y="219.8" width="12.0" height="12.0" fill="#dfeaf8" stroke="#7794b5" stroke-width="0.7"/>
+<rect x="185.6" y="219.8" width="12.0" height="12.0" fill="#dfeaf8" stroke="#7794b5" stroke-width="0.7"/>
+<rect x="82.0" y="234.6" width="12.0" height="12.0" fill="#dfeaf8" stroke="#7794b5" stroke-width="0.7"/>
+<rect x="96.8" y="234.6" width="12.0" height="12.0" fill="#dfeaf8" stroke="#7794b5" stroke-width="0.7"/>
+<rect x="111.6" y="234.6" width="12.0" height="12.0" fill="#dfeaf8" stroke="#7794b5" stroke-width="0.7"/>
+<rect x="126.4" y="234.6" width="12.0" height="12.0" fill="#dfeaf8" stroke="#7794b5" stroke-width="0.7"/>
+<rect x="141.2" y="234.6" width="12.0" height="12.0" fill="#dfeaf8" stroke="#7794b5" stroke-width="0.7"/>
+<rect x="156.0" y="234.6" width="12.0" height="12.0" fill="#dfeaf8" stroke="#7794b5" stroke-width="0.7"/>
+<rect x="170.8" y="234.6" width="12.0" height="12.0" fill="#dfeaf8" stroke="#7794b5" stroke-width="0.7"/>
+<rect x="185.6" y="234.6" width="12.0" height="12.0" fill="#dfeaf8" stroke="#7794b5" stroke-width="0.7"/>
+<rect x="82.0" y="249.4" width="12.0" height="12.0" fill="#dfeaf8" stroke="#7794b5" stroke-width="0.7"/>
+<rect x="96.8" y="249.4" width="12.0" height="12.0" fill="#dfeaf8" stroke="#7794b5" stroke-width="0.7"/>
+<rect x="111.6" y="249.4" width="12.0" height="12.0" fill="#dfeaf8" stroke="#7794b5" stroke-width="0.7"/>
+<rect x="126.4" y="249.4" width="12.0" height="12.0" fill="#dfeaf8" stroke="#7794b5" stroke-width="0.7"/>
+<rect x="141.2" y="249.4" width="12.0" height="12.0" fill="#dfeaf8" stroke="#7794b5" stroke-width="0.7"/>
+<rect x="156.0" y="249.4" width="12.0" height="12.0" fill="#dfeaf8" stroke="#7794b5" stroke-width="0.7"/>
+<rect x="170.8" y="249.4" width="12.0" height="12.0" fill="#dfeaf8" stroke="#7794b5" stroke-width="0.7"/>
+<rect x="185.6" y="249.4" width="12.0" height="12.0" fill="#dfeaf8" stroke="#7794b5" stroke-width="0.7"/>
+<rect x="82.0" y="264.2" width="12.0" height="12.0" fill="#dfeaf8" stroke="#7794b5" stroke-width="0.7"/>
+<rect x="96.8" y="264.2" width="12.0" height="12.0" fill="#dfeaf8" stroke="#7794b5" stroke-width="0.7"/>
+<rect x="111.6" y="264.2" width="12.0" height="12.0" fill="#dfeaf8" stroke="#7794b5" stroke-width="0.7"/>
+<rect x="126.4" y="264.2" width="12.0" height="12.0" fill="#dfeaf8" stroke="#7794b5" stroke-width="0.7"/>
+<rect x="141.2" y="264.2" width="12.0" height="12.0" fill="#dfeaf8" stroke="#7794b5" stroke-width="0.7"/>
+<rect x="156.0" y="264.2" width="12.0" height="12.0" fill="#dfeaf8" stroke="#7794b5" stroke-width="0.7"/>
+<rect x="170.8" y="264.2" width="12.0" height="12.0" fill="#dfeaf8" stroke="#7794b5" stroke-width="0.7"/>
+<rect x="185.6" y="264.2" width="12.0" height="12.0" fill="#dfeaf8" stroke="#7794b5" stroke-width="0.7"/>
+<rect x="82.0" y="279.0" width="12.0" height="12.0" fill="#dfeaf8" stroke="#7794b5" stroke-width="0.7"/>
+<rect x="96.8" y="279.0" width="12.0" height="12.0" fill="#dfeaf8" stroke="#7794b5" stroke-width="0.7"/>
+<rect x="111.6" y="279.0" width="12.0" height="12.0" fill="#dfeaf8" stroke="#7794b5" stroke-width="0.7"/>
+<rect x="126.4" y="279.0" width="12.0" height="12.0" fill="#dfeaf8" stroke="#7794b5" stroke-width="0.7"/>
+<rect x="141.2" y="279.0" width="12.0" height="12.0" fill="#dfeaf8" stroke="#7794b5" stroke-width="0.7"/>
+<rect x="156.0" y="279.0" width="12.0" height="12.0" fill="#dfeaf8" stroke="#7794b5" stroke-width="0.7"/>
+<rect x="170.8" y="279.0" width="12.0" height="12.0" fill="#dfeaf8" stroke="#7794b5" stroke-width="0.7"/>
+<rect x="185.6" y="279.0" width="12.0" height="12.0" fill="#dfeaf8" stroke="#7794b5" stroke-width="0.7"/>
+<rect x="82.0" y="293.8" width="12.0" height="12.0" fill="#dfeaf8" stroke="#7794b5" stroke-width="0.7"/>
+<rect x="96.8" y="293.8" width="12.0" height="12.0" fill="#dfeaf8" stroke="#7794b5" stroke-width="0.7"/>
+<rect x="111.6" y="293.8" width="12.0" height="12.0" fill="#dfeaf8" stroke="#7794b5" stroke-width="0.7"/>
+<rect x="126.4" y="293.8" width="12.0" height="12.0" fill="#dfeaf8" stroke="#7794b5" stroke-width="0.7"/>
+<rect x="141.2" y="293.8" width="12.0" height="12.0" fill="#dfeaf8" stroke="#7794b5" stroke-width="0.7"/>
+<rect x="156.0" y="293.8" width="12.0" height="12.0" fill="#dfeaf8" stroke="#7794b5" stroke-width="0.7"/>
+<rect x="170.8" y="293.8" width="12.0" height="12.0" fill="#dfeaf8" stroke="#7794b5" stroke-width="0.7"/>
+<rect x="185.6" y="293.8" width="12.0" height="12.0" fill="#dfeaf8" stroke="#7794b5" stroke-width="0.7"/>
+<rect x="82.0" y="308.6" width="12.0" height="12.0" fill="#dfeaf8" stroke="#7794b5" stroke-width="0.7"/>
+<rect x="96.8" y="308.6" width="12.0" height="12.0" fill="#dfeaf8" stroke="#7794b5" stroke-width="0.7"/>
+<rect x="111.6" y="308.6" width="12.0" height="12.0" fill="#dfeaf8" stroke="#7794b5" stroke-width="0.7"/>
+<rect x="126.4" y="308.6" width="12.0" height="12.0" fill="#dfeaf8" stroke="#7794b5" stroke-width="0.7"/>
+<rect x="141.2" y="308.6" width="12.0" height="12.0" fill="#dfeaf8" stroke="#7794b5" stroke-width="0.7"/>
+<rect x="156.0" y="308.6" width="12.0" height="12.0" fill="#dfeaf8" stroke="#7794b5" stroke-width="0.7"/>
+<rect x="170.8" y="308.6" width="12.0" height="12.0" fill="#dfeaf8" stroke="#7794b5" stroke-width="0.7"/>
+<rect x="185.6" y="308.6" width="12.0" height="12.0" fill="#dfeaf8" stroke="#7794b5" stroke-width="0.7"/>
+<rect x="266" y="116" width="220" height="224" rx="10" class="frame"/>
+<text x="376" y="148" class="head" text-anchor="middle" dominant-baseline="middle">Host front end</text>
+<text x="376" y="185" class="body" text-anchor="middle" dominant-baseline="middle">Input projection</text>
+<text x="376" y="219" class="body" text-anchor="middle" dominant-baseline="middle">Causal Conv1D</text>
+<text x="376" y="253" class="body" text-anchor="middle" dominant-baseline="middle">ReLU activation</text>
+<text x="376" y="308" class="minor" text-anchor="middle" dominant-baseline="middle">PyTorch</text>
+<rect x="520" y="116" width="254" height="224" rx="10" class="frame"/>
+<text x="647" y="148" class="head" text-anchor="middle" dominant-baseline="middle">Selective parameters</text>
+<text x="647" y="185" class="body" text-anchor="middle" dominant-baseline="middle">B, C, Δ projections</text>
+<text x="647" y="219" class="body" text-anchor="middle" dominant-baseline="middle">A: learned poles</text>
+<text x="647" y="253" class="body" text-anchor="middle" dominant-baseline="middle">ZOH / bilinear map</text>
+<text x="647" y="308" class="minor" text-anchor="middle" dominant-baseline="middle">PyTorch + quantization</text>
+<rect x="808" y="92" width="376" height="270" rx="13" class="blue"/>
+<text x="996" y="128" class="head" text-anchor="middle" dominant-baseline="middle">precision_scan.sv</text>
+<text x="996" y="166" class="body" text-anchor="middle" dominant-baseline="middle">8 channels × 4 states</text>
+<text x="996" y="202" class="equ" text-anchor="middle" dominant-baseline="middle">hₜ = αₜhₜ₋₁ + eₜ</text>
+<text x="996" y="239" class="equ" text-anchor="middle" dominant-baseline="middle">yₜ = Σ Cₜhₜ + D·uₜ</text>
+<text x="996" y="288" class="minor" text-anchor="middle" dominant-baseline="middle">Q6.10 I/O  |  per-state p[d,n]</text>
+<text x="996" y="325" class="minor" text-anchor="middle" dominant-baseline="middle">ready / valid  |  saturation</text>
+<rect x="1218" y="116" width="240" height="224" rx="10" class="frame"/>
+<text x="1338" y="148" class="head" text-anchor="middle" dominant-baseline="middle">Host output path</text>
+<text x="1338" y="185" class="body" text-anchor="middle" dominant-baseline="middle">Input gate</text>
+<text x="1338" y="219" class="body" text-anchor="middle" dominant-baseline="middle">Output projection</text>
+<text x="1338" y="253" class="body" text-anchor="middle" dominant-baseline="middle">Residual addition</text>
+<text x="1338" y="308" class="minor" text-anchor="middle" dominant-baseline="middle">PyTorch</text>
+<rect x="1492" y="116" width="204" height="224" rx="10" class="frame"/>
+<text x="1594" y="148" class="head" text-anchor="middle" dominant-baseline="middle">Classification</text>
+<text x="1594" y="185" class="body" text-anchor="middle" dominant-baseline="middle">10-class head</text>
+<text x="1594" y="230" class="head" text-anchor="middle" dominant-baseline="middle">0  1  2  …  9</text>
+<text x="1594" y="308" class="minor" text-anchor="middle" dominant-baseline="middle">PyTorch logits</text>
+<path d="M232 236 L261 236" class="path"/>
+<path d="M486 236 L515 236" class="path"/>
+<path d="M774 236 L803 236" class="path"/>
+<path d="M1184 236 L1213 236" class="path"/>
+<path d="M1458 236 L1487 236" class="path"/>
+<path d="M140 340 V384 H1338 V340" class="dashed"/>
+<text x="745" y="374" class="minor" text-anchor="middle" dominant-baseline="middle">separate gate projection from input sequence (host)</text>
+<rect x="22" y="450" width="1704" height="157" rx="14" class="accent"/>
+<rect x="60" y="479" width="500" height="100" rx="10" class="frame"/>
+<text x="310" y="503" class="head" text-anchor="middle" dominant-baseline="middle">Offline state-precision calibration</text>
+<text x="310" y="539" class="minor" text-anchor="middle" dominant-baseline="middle">validation-set sensitivity + bit budget</text>
+<rect x="624" y="479" width="490" height="100" rx="10" class="frame"/>
+<text x="869" y="503" class="head" text-anchor="middle" dominant-baseline="middle">Static fractional-bit configuration</text>
+<text x="869" y="539" class="minor" text-anchor="middle" dominant-baseline="middle">precision64.json → precision_config.svh</text>
+<rect x="1178" y="479" width="508" height="100" rx="10" class="frame"/>
+<text x="1432" y="503" class="head" text-anchor="middle" dominant-baseline="middle">RTL evidence</text>
+<text x="1432" y="539" class="minor" text-anchor="middle" dominant-baseline="middle">Icarus + Verilator + Yosys</text>
+<path d="M560 530 H619" class="dashed"/>
+<path d="M1114 530 H1173" class="dashed"/>
+<path d="M869 479 V432 H996 V362" class="dashed"/>
+</svg>

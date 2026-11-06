@@ -1,12 +1,27 @@
+# Local builds and generated simulation output
 build/
 .venv/
 __pycache__/
 .pytest_cache/
 *.pyc
 *.vcd
+*.fst
 *.log
-.vscode/
-.idea/
-*.debug-backup
 core
 core.*
+
+# Editor and operating-system files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*.debug-backup
+*.bak
+
+# Local diagnostics and temporary files
+.coverage
+htmlcov/
+*.tmp
+*.temp
